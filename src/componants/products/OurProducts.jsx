@@ -9,24 +9,38 @@ const OurProducts = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
 
   const { user } = useUser();
 
   useEffect(() => {
-    // Fetch products from API
+    if (!apiUrl) {
+      setError("API URL is not defined.");
+      setLoading(false);
+      return;
+    }
+
     const fetchProducts = async () => {
       try {
+        setLoading(true);
+        setError(""); // Reset error before retrying
         const response = await axios.get(`${apiUrl}api/products`);
-        setProducts(response.data); // Store the fetched products in state
-      } catch (err) {
-        setError("Failed to load products", err);
-      } finally {
+        setProducts(response.data);
         setLoading(false);
+      } catch (error) {
+        if (retryCount < 3) {
+          setTimeout(() => {
+            setRetryCount((prev) => prev + 1);
+          }, 2000); // Retry after 2 seconds
+        } else {
+          setError(`Failed to load products: ${error.message}`);
+          setLoading(false);
+        }
       }
     };
 
-    fetchProducts(); // Call the fetch function when the component mounts
-  }, []); // Empty dependency array ensures this effect runs only once after the component mounts
+    fetchProducts();
+  }, [retryCount]); // Retry on failure
 
   const handleDelete = async (productId) => {
     try {
@@ -34,18 +48,34 @@ const OurProducts = () => {
       setProducts((prevProducts) =>
         prevProducts.filter((product) => product._id !== productId)
       );
-    } catch (err) {
-      console.error("Failed to delete product:", err);
+    } catch (error) {
+      console.error("Failed to delete product:", error);
       alert("Failed to delete product. Please try again.");
     }
   };
 
   if (loading) {
-    return <div>Loading products...</div>;
+    return (
+      <div className="text-center text-lg font-semibold">
+        Loading products...
+      </div>
+    );
   }
 
   if (error) {
-    return <div>{error}</div>;
+    return (
+      <div className="text-center text-red-500">
+        {error} <br />
+        {retryCount >= 3 && (
+          <button
+            onClick={() => setRetryCount(0)}
+            className="bg-blue-500 text-white px-4 py-2 mt-4 rounded-md"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -58,15 +88,15 @@ const OurProducts = () => {
             className="bg-white shadow-lg rounded-lg overflow-hidden border-2"
           >
             <img
-              src={product.image} // Ensure that the image URL is correct in your backend response
+              src={product.image}
               alt={product.name}
               className="w-full h-fit object-cover"
             />
             <div className="flex justify-between bg-slate-100">
-              <p className=" text-sm font-semibold p-2">{product.name}</p>
-              <p className=" text-sm font-bold p-2">${product.price}</p>
+              <p className="text-sm font-semibold p-2">{product.name}</p>
+              <p className="text-sm font-bold p-2">${product.price}</p>
             </div>
-            <div className="p-2 flex justify-center bg-slate-100 ">
+            <div className="p-2 flex justify-center bg-slate-100">
               {user?.role === "meheraadmin" ? (
                 <button
                   onClick={() => handleDelete(product._id)}
@@ -76,7 +106,7 @@ const OurProducts = () => {
                 </button>
               ) : (
                 <Link to="/checkOutPage" state={{ product }}>
-                  <button className="bg-[#30d490] p-2 rounded-md text-white ">
+                  <button className="bg-[#30d490] p-2 rounded-md text-white">
                     Order Now
                   </button>
                 </Link>
